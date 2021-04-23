@@ -21,7 +21,7 @@ MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 D3DApp::D3DApp(HINSTANCE hInstance)
 	: m_hAppInst(hInstance),
-	m_MainWndCaption(L"Rendering a Cube"),
+	m_MainWndCaption(L"Texture Mapping"),
 	m_ClientWidth(800),
 	m_ClientHeight(600),
 	m_hMainWnd(nullptr),
@@ -105,7 +105,11 @@ bool D3DApp::Init()
 {
 	m_pMouse = std::make_unique<DirectX::Mouse>();
 	m_pKeyboard = std::make_unique<DirectX::Keyboard>();
+
 	if (!InitMainWindow())
+		return false;
+
+	if (!InitDirect2D())
 		return false;
 
 	if (!InitDirect3D())
@@ -119,7 +123,7 @@ void D3DApp::OnResize()
 	assert(m_pd3dImmediateContext);
 	assert(m_pd3dDevice);
 	assert(m_pSwapChain);
-
+	
 	if (m_pd3dDevice1 != nullptr)
 	{
 		assert(m_pd3dImmediateContext1);
@@ -134,7 +138,7 @@ void D3DApp::OnResize()
 
 	// 重设交换链并且重新创建渲染目标视图
 	ComPtr<ID3D11Texture2D> backBuffer;
-	HR(m_pSwapChain->ResizeBuffers(1, m_ClientWidth, m_ClientHeight, DXGI_FORMAT_R8G8B8A8_UNORM, 0));
+	HR(m_pSwapChain->ResizeBuffers(1, m_ClientWidth, m_ClientHeight, DXGI_FORMAT_B8G8R8A8_UNORM, 0));	// 注意此处DXGI_FORMAT_B8G8R8A8_UNORM
 	HR(m_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(backBuffer.GetAddressOf())));
 	HR(m_pd3dDevice->CreateRenderTargetView(backBuffer.Get(), nullptr, m_pRenderTargetView.GetAddressOf()));
 	
@@ -163,7 +167,6 @@ void D3DApp::OnResize()
 		depthStencilDesc.SampleDesc.Count = 1;
 		depthStencilDesc.SampleDesc.Quality = 0;
 	}
-	
 
 
 	depthStencilDesc.Usage = D3D11_USAGE_DEFAULT;
@@ -198,11 +201,114 @@ void D3DApp::OnResize()
 
 LRESULT D3DApp::MsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	
 	switch (msg)
 	{
-		// 省略原有的部分...
+		// WM_ACTIVATE is sent when the window is activated or deactivated.  
+		// We pause the game when the window is deactivated and unpause it 
+		// when it becomes active.  
+	case WM_ACTIVATE:
+		if (LOWORD(wParam) == WA_INACTIVE)
+		{
+			m_AppPaused = true;
+			m_Timer.Stop();
+		}
+		else
+		{
+			m_AppPaused = false;
+			m_Timer.Start();
+		}
+		return 0;
 
+		// WM_SIZE is sent when the user resizes the window.  
+	case WM_SIZE:
+		// Save the new client area dimensions.
+		m_ClientWidth = LOWORD(lParam);
+		m_ClientHeight = HIWORD(lParam);
+		if (m_pd3dDevice)
+		{
+			if (wParam == SIZE_MINIMIZED)
+			{
+				m_AppPaused = true;
+				m_Minimized = true;
+				m_Maximized = false;
+			}
+			else if (wParam == SIZE_MAXIMIZED)
+			{
+				m_AppPaused = false;
+				m_Minimized = false;
+				m_Maximized = true;
+				OnResize();
+			}
+			else if (wParam == SIZE_RESTORED)
+			{
+
+				// Restoring from minimized state?
+				if (m_Minimized)
+				{
+					m_AppPaused = false;
+					m_Minimized = false;
+					OnResize();
+				}
+
+				// Restoring from maximized state?
+				else if (m_Maximized)
+				{
+					m_AppPaused = false;
+					m_Maximized = false;
+					OnResize();
+				}
+				else if (m_Resizing)
+				{
+					// If user is dragging the resize bars, we do not resize 
+					// the buffers here because as the user continuously 
+					// drags the resize bars, a stream of WM_SIZE messages are
+					// sent to the window, and it would be pointless (and slow)
+					// to resize for each WM_SIZE message received from dragging
+					// the resize bars.  So instead, we reset after the user is 
+					// done resizing the window and releases the resize bars, which 
+					// sends a WM_EXITSIZEMOVE message.
+				}
+				else // API call such as SetWindowPos or m_pSwapChain->SetFullscreenState.
+				{
+					OnResize();
+				}
+			}
+		}
+		return 0;
+
+		// WM_EXITSIZEMOVE is sent when the user grabs the resize bars.
+	case WM_ENTERSIZEMOVE:
+		m_AppPaused = true;
+		m_Resizing = true;
+		m_Timer.Stop();
+		return 0;
+
+		// WM_EXITSIZEMOVE is sent when the user releases the resize bars.
+		// Here we reset everything based on the new window dimensions.
+	case WM_EXITSIZEMOVE:
+		m_AppPaused = false;
+		m_Resizing = false;
+		m_Timer.Start();
+		OnResize();
+		return 0;
+
+		// WM_DESTROY is sent when the window is being destroyed.
+	case WM_DESTROY:
+		PostQuitMessage(0);
+		return 0;
+
+		// The WM_MENUCHAR message is sent when a menu is active and the user presses 
+		// a key that does not correspond to any mnemonic or accelerator key. 
+	case WM_MENUCHAR:
+		// Don't beep when we alt-enter.
+		return MAKELRESULT(0, MNC_CLOSE);
+
+		// Catch this message so to prevent the window from becoming too small.
+	case WM_GETMINMAXINFO:
+		((MINMAXINFO*)lParam)->ptMinTrackSize.x = 200;
+		((MINMAXINFO*)lParam)->ptMinTrackSize.y = 200;
+		return 0;
+	
 		// 监测这些键盘/鼠标事件
 	case WM_INPUT:
 
@@ -275,6 +381,15 @@ bool D3DApp::InitMainWindow()
 
 	ShowWindow(m_hMainWnd, SW_SHOW);
 	UpdateWindow(m_hMainWnd);
+	
+	return true;
+}
+
+bool D3DApp::InitDirect2D()
+{
+	HR(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, m_pd2dFactory.GetAddressOf()));
+	HR(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory),
+		reinterpret_cast<IUnknown**>(m_pdwriteFactory.GetAddressOf())));
 
 	return true;
 }
@@ -284,7 +399,7 @@ bool D3DApp::InitDirect3D()
 	HRESULT hr = S_OK;
 
 	// 创建D3D设备 和 D3D设备上下文
-	UINT createDeviceFlags = 0;
+	UINT createDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;	// Direct2D需要支持BGRA格式
 #if defined(DEBUG) || defined(_DEBUG)  
 	createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
@@ -312,7 +427,7 @@ bool D3DApp::InitDirect3D()
 		d3dDriverType = driverTypes[driverTypeIndex];
 		hr = D3D11CreateDevice(nullptr, d3dDriverType, nullptr, createDeviceFlags, featureLevels, numFeatureLevels,
 			D3D11_SDK_VERSION, m_pd3dDevice.GetAddressOf(), &featureLevel, m_pd3dImmediateContext.GetAddressOf());
-
+		
 		if (hr == E_INVALIDARG)
 		{
 			// Direct3D 11.0 的API不承认D3D_FEATURE_LEVEL_11_1，所以我们需要尝试特性等级11.0以及以下的版本
@@ -339,23 +454,23 @@ bool D3DApp::InitDirect3D()
 
 	// 检测 MSAA支持的质量等级
 	m_pd3dDevice->CheckMultisampleQualityLevels(
-		DXGI_FORMAT_R8G8B8A8_UNORM, 4, &m_4xMsaaQuality);
+		DXGI_FORMAT_B8G8R8A8_UNORM, 4, &m_4xMsaaQuality);	// 注意此处DXGI_FORMAT_B8G8R8A8_UNORM
 	assert(m_4xMsaaQuality > 0);
 
-
-
+	
+	
 
 	ComPtr<IDXGIDevice> dxgiDevice = nullptr;
 	ComPtr<IDXGIAdapter> dxgiAdapter = nullptr;
 	ComPtr<IDXGIFactory1> dxgiFactory1 = nullptr;	// D3D11.0(包含DXGI1.1)的接口类
 	ComPtr<IDXGIFactory2> dxgiFactory2 = nullptr;	// D3D11.1(包含DXGI1.2)特有的接口类
-
+	
 	// 为了正确创建 DXGI交换链，首先我们需要获取创建 D3D设备 的 DXGI工厂，否则会引发报错：
 	// "IDXGIFactory::CreateSwapChain: This function is being called with a device from a different IDXGIFactory."
 	HR(m_pd3dDevice.As(&dxgiDevice));
 	HR(dxgiDevice->GetAdapter(dxgiAdapter.GetAddressOf()));
 	HR(dxgiAdapter->GetParent(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(dxgiFactory1.GetAddressOf())));
-
+	
 	// 查看该对象是否包含IDXGIFactory2接口
 	hr = dxgiFactory1.As(&dxgiFactory2);
 	// 如果包含，则说明支持D3D11.1
@@ -368,7 +483,7 @@ bool D3DApp::InitDirect3D()
 		ZeroMemory(&sd, sizeof(sd));
 		sd.Width = m_ClientWidth;
 		sd.Height = m_ClientHeight;
-		sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		sd.Format = DXGI_FORMAT_B8G8R8A8_UNORM;		// 注意此处DXGI_FORMAT_B8G8R8A8_UNORM
 		// 是否开启4倍多重采样？
 		if (m_Enable4xMsaa)
 		{
@@ -404,7 +519,7 @@ bool D3DApp::InitDirect3D()
 		sd.BufferDesc.Height = m_ClientHeight;
 		sd.BufferDesc.RefreshRate.Numerator = 60;
 		sd.BufferDesc.RefreshRate.Denominator = 1;
-		sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		sd.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;	// 注意此处DXGI_FORMAT_B8G8R8A8_UNORM
 		sd.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
 		sd.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 		// 是否开启4倍多重采样？
@@ -426,6 +541,8 @@ bool D3DApp::InitDirect3D()
 		sd.Flags = 0;
 		HR(dxgiFactory1->CreateSwapChain(m_pd3dDevice.Get(), &sd, m_pSwapChain.GetAddressOf()));
 	}
+	
+	
 
 	// 可以禁止alt+enter全屏
 	dxgiFactory1->MakeWindowAssociation(m_hMainWnd, DXGI_MWA_NO_ALT_ENTER | DXGI_MWA_NO_WINDOW_CHANGES);
@@ -433,13 +550,16 @@ bool D3DApp::InitDirect3D()
 	// 设置调试对象名
 	D3D11SetDebugObjectName(m_pd3dImmediateContext.Get(), "ImmediateContext");
 	DXGISetDebugObjectName(m_pSwapChain.Get(), "SwapChain");
-
+	
 	// 每当窗口被重新调整大小的时候，都需要调用这个OnResize函数。现在调用
 	// 以避免代码重复
 	OnResize();
 
 	return true;
 }
+
+
+
 
 void D3DApp::CalculateFrameStats()
 {
