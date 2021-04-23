@@ -22,6 +22,7 @@ public:
 		DirectionalLight dirLight[10];
 		PointLight pointLight[10];
 		SpotLight spotLight[10];
+	
 		Material material;
 		int numDirLight;
 		int numPointLight;
@@ -83,6 +84,10 @@ private:
 	ComPtr<ID3D11PixelShader> m_pPixelShader3D;				    // 用于3D的像素着色器
 	ComPtr<ID3D11VertexShader> m_pVertexShader2D;				// 用于2D的顶点着色器
 	ComPtr<ID3D11PixelShader> m_pPixelShader2D;				    // 用于2D的像素着色器
+
+	DirectionalLight m_DirLight;					// 默认环境光
+	PointLight m_PointLight;						// 默认点光
+	SpotLight m_SpotLight;
 
 	VSConstantBuffer m_VSConstantBuffer;						// 用于修改用于VS的GPU常量缓冲区的变量
 	PSConstantBuffer m_PSConstantBuffer;						// 用于修改用于PS的GPU常量缓冲区的变量

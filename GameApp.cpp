@@ -86,11 +86,24 @@ void GameApp::OnResize()
 void GameApp::UpdateScene(float dt)
 {
 
+
+	 //键盘切换灯光类型
 	Keyboard::State state = m_pKeyboard->GetState();
+	
+	
 	m_KeyboardTracker.Update(state);	
 
+	if (m_KeyboardTracker.IsKeyPressed(Keyboard::W))
+	{
+		if (m_PSConstantBuffer.numPointLight == 1)
+			m_PSConstantBuffer.numPointLight = 0;
+		else
+			m_PSConstantBuffer.numPointLight = 1;
+		
+	}
+
 	// 键盘切换模式
-	if (m_KeyboardTracker.IsKeyPressed(Keyboard::D1) && m_CurrMode != ShowMode::WoodCrate)
+	else if (m_KeyboardTracker.IsKeyPressed(Keyboard::D1) && m_CurrMode != ShowMode::WoodCrate)
 	{
 		// 播放木箱动画
 		m_CurrMode = ShowMode::WoodCrate;
@@ -132,12 +145,12 @@ void GameApp::UpdateScene(float dt)
 		m_VSConstantBuffer.world = XMMatrixTranspose(W);
 		m_VSConstantBuffer.worldInvTranspose = XMMatrixTranspose(InverseTranspose(W));
 
-		/*static float phi2 = 0.0f;
+		static float phi2 = 0.0f;
 		phi2 += 0.01f;
 		XMMATRIX texMat = XMMatrixTranslation(-0.5f, -0.5f, 0.0f) * XMMatrixRotationZ(phi2) * XMMatrixTranslation(0.5f, 0.5f, 0.0f);
 
 
-		m_VSConstantBuffer.Rotationtex = XMMatrixTranspose(texMat);*/
+		m_VSConstantBuffer.Rotationtex = XMMatrixTranspose(texMat);
 
 
 		// 更新常量缓冲区，让立方体转起来
@@ -148,8 +161,9 @@ void GameApp::UpdateScene(float dt)
 
 
 
-
-
+		HR(m_pd3dImmediateContext->Map(m_pConstantBuffers[1].Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
+		memcpy_s(mappedData.pData, sizeof(PSConstantBuffer), &m_PSConstantBuffer, sizeof(PSConstantBuffer));
+		m_pd3dImmediateContext->Unmap(m_pConstantBuffers[1].Get(), 0);
 
 	}
 	else if (m_CurrMode == ShowMode::FireAnim)
@@ -181,13 +195,25 @@ void GameApp::UpdateScene(float dt)
 		m_VSConstantBuffer.Rotationtex = XMMatrixTranspose(texMat);
 		// 更新常量缓冲区，让立方体转起来
 		D3D11_MAPPED_SUBRESOURCE mappedData;
-
 		HR(m_pd3dImmediateContext->Map(m_pConstantBuffers[0].Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
 		memcpy_s(mappedData.pData, sizeof(VSConstantBuffer), &m_VSConstantBuffer, sizeof(VSConstantBuffer));
-
 		m_pd3dImmediateContext->Unmap(m_pConstantBuffers[0].Get(), 0);
 
+
+
+		HR(m_pd3dImmediateContext->Map(m_pConstantBuffers[1].Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
+		memcpy_s(mappedData.pData, sizeof(PSConstantBuffer), &m_PSConstantBuffer, sizeof(PSConstantBuffer));
+		m_pd3dImmediateContext->Unmap(m_pConstantBuffers[1].Get(), 0);
+
+
+
+
 	}
+
+
+
+	
+
 }
 
 void GameApp::DrawScene()
@@ -230,7 +256,8 @@ void GameApp::DrawScene()
 	if (m_pd2dRenderTarget != nullptr)
 	{
 		m_pd2dRenderTarget->BeginDraw();
-		static const WCHAR* textStr = L"切换显示: 1-作业1 2-作业2 3-作业3\n";
+		static const WCHAR* textStr = L"切换显示: 1-作业1 2-作业2 3-作业3\n"
+			L"按W光灯\n";
 		std::wstring textStr1 = L"2021QG工作室图形组第4次小组培训\n"
 			L"方铭\n"
 			L"2021年4月21日 ";
@@ -321,9 +348,9 @@ bool GameApp::InitResource()
 	D3D11_SAMPLER_DESC sampDesc;
 	ZeroMemory(&sampDesc, sizeof(sampDesc));
 	sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-	sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
-	sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
-	sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;
+	sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_MIRROR;
+	sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_MIRROR;
+	sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_MIRROR;
 	sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
 	sampDesc.MinLOD = 0;
 	sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
@@ -335,8 +362,9 @@ bool GameApp::InitResource()
 	// 初始化常量缓冲区的值
 	//
 
+
 	// 初始化用于VS的常量缓冲区的值
-	m_VSConstantBuffer.world = XMMatrixIdentity();			
+	m_VSConstantBuffer.world = XMMatrixIdentity();
 	m_VSConstantBuffer.view = XMMatrixTranspose(XMMatrixLookAtLH(
 		XMVectorSet(0.0f, 0.0f, -5.0f, 0.0f),
 		XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f),
@@ -344,30 +372,43 @@ bool GameApp::InitResource()
 	));
 	m_VSConstantBuffer.proj = XMMatrixTranspose(XMMatrixPerspectiveFovLH(XM_PIDIV2, AspectRatio(), 1.0f, 1000.0f));
 	m_VSConstantBuffer.worldInvTranspose = XMMatrixIdentity();
-	
+
 	// 初始化用于PS的常量缓冲区的值
 	// 这里只使用一盏点光来演示
+	m_PSConstantBuffer.dirLight[0].ambient = XMFLOAT4(0.5f, 0.2f, 0.2f, 1.0f);
+	m_PSConstantBuffer.dirLight[0].diffuse = XMFLOAT4(1.0f, 0.8f, 0.8f, 1.0f);
+	m_PSConstantBuffer.dirLight[0].specular = XMFLOAT4(1.0f, 0.5f, 0.5f, 1.0f);
+	m_PSConstantBuffer.dirLight[0].direction = XMFLOAT3(-0.577f, -0.577f, 0.577f);
+
+
 	m_PSConstantBuffer.pointLight[0].position = XMFLOAT3(0.0f, 0.0f, -10.0f);
 	m_PSConstantBuffer.pointLight[0].ambient = XMFLOAT4(0.3f, 0.3f, 0.3f, 1.0f);
 	m_PSConstantBuffer.pointLight[0].diffuse = XMFLOAT4(0.7f, 0.7f, 0.7f, 1.0f);
 	m_PSConstantBuffer.pointLight[0].specular = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
 	m_PSConstantBuffer.pointLight[0].att = XMFLOAT3(0.0f, 0.1f, 0.0f);
 	m_PSConstantBuffer.pointLight[0].range = 25.0f;
-	m_PSConstantBuffer.numDirLight = 0;
-	m_PSConstantBuffer.numPointLight = 1;
+
+	m_PSConstantBuffer.numDirLight = 1;
+	m_PSConstantBuffer.numPointLight = 0;
 	m_PSConstantBuffer.numSpotLight = 0;
 	// 初始化材质
-	m_PSConstantBuffer.material.ambient = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+	m_PSConstantBuffer.material.ambient = XMFLOAT4(0.5f, 0.5f, 0.5f, 1.0f);
 	m_PSConstantBuffer.material.diffuse = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	m_PSConstantBuffer.material.specular = XMFLOAT4(0.1f, 0.1f, 0.1f, 5.0f);
 	// 注意不要忘记设置此处的观察位置，否则高亮部分会有问题
 	m_PSConstantBuffer.eyePos = XMFLOAT4(0.0f, 0.0f, -5.0f, 0.0f);
 
 
+
+	
+
+
+
+
+	
+
 	// 更新PS常量缓冲区资源
-
 	D3D11_MAPPED_SUBRESOURCE mappedData;
-
 	HR(m_pd3dImmediateContext->Map(m_pConstantBuffers[1].Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData));
 	memcpy_s(mappedData.pData, sizeof(PSConstantBuffer), &m_PSConstantBuffer, sizeof(PSConstantBuffer));
 	m_pd3dImmediateContext->Unmap(m_pConstantBuffers[1].Get(), 0);
