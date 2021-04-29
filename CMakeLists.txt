@@ -9,8 +9,8 @@ add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 
 aux_source_directory(. DIR_SRCS)
 
-add_executable(03_Rendering_a_Cube WIN32 ${DIR_SRCS})
-set_target_properties(03_Rendering_a_Cube PROPERTIES OUTPUT_NAME "03 Rendering a Cube")
+add_executable(22_Static_Cube_Mapping WIN32 ${DIR_SRCS})
+set_target_properties(22_Static_Cube_Mapping PROPERTIES OUTPUT_NAME "22 Static Cube Mapping")
 
 if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/HLSL)
 	file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/HLSL DESTINATION ${CMAKE_CURRENT_BINARY_DIR})

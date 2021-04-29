@@ -97,10 +97,8 @@ namespace DirectX
 		static void __cdecl ProcessMessage(UINT message, WPARAM wParam, LPARAM lParam);
 #endif
 		// Singleton
-		
 		static Mouse& __cdecl Get();
-		
-		
+
 	private:
 		// Private implementation.
 		class Impl;

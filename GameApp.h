@@ -2,23 +2,18 @@
 #define GAMEAPP_H
 
 #include "d3dApp.h"
-
+#include "Camera.h"
+#include "GameObject.h"
+#include "SkyRender.h"
+#include "ObjReader.h"
+#include "Collision.h"
 class GameApp : public D3DApp
 {
 public:
-	struct VertexPosColor
-	{
-		DirectX::XMFLOAT3 pos;
-		DirectX::XMFLOAT4 color;
-		static const D3D11_INPUT_ELEMENT_DESC inputLayout[2];
-	};
-
-	struct ConstantBuffer
-	{
-		DirectX::XMMATRIX world;
-		DirectX::XMMATRIX view;
-		DirectX::XMMATRIX proj;
-	};
+	// 摄像机模式
+	enum class CameraMode { FirstPerson, ThirdPerson, Free };
+	// 天空盒模式
+	enum class SkyBoxMode { Daylight, Sunset, Desert };
 
 public:
 	GameApp(HINSTANCE hInstance);
@@ -29,22 +24,31 @@ public:
 	void UpdateScene(float dt);
 	void DrawScene();
 
-
 private:
-	bool InitEffect();
 	bool InitResource();
-
-
-
+	
 private:
-	ComPtr<ID3D11InputLayout> m_pVertexLayout;	    // 顶点输入布局
-	ComPtr<ID3D11Buffer> m_pVertexBuffer;			// 顶点缓冲区
-	ComPtr<ID3D11Buffer> m_pIndexBuffer;			// 索引缓冲区
-	ComPtr<ID3D11Buffer> m_pConstantBuffer;		    // 常量缓冲区
+	
+	ComPtr<ID2D1SolidColorBrush> m_pColorBrush;				    // 单色笔刷
+	ComPtr<IDWriteFont> m_pFont;								// 字体
+	ComPtr<IDWriteTextFormat> m_pTextFormat;					// 文本格式
 
-	ComPtr<ID3D11VertexShader> m_pVertexShader;	    // 顶点着色器
-	ComPtr<ID3D11PixelShader> m_pPixelShader;		// 像素着色器
-	ConstantBuffer m_CBuffer;	                    // 用于修改GPU常量缓冲区的变量
+	GameObject m_Sphere;										// 球
+	GameObject m_Ground;										// 地面
+	GameObject m_Cylinder;									    // 圆柱
+	GameObject m_Cube;
+	BasicEffect m_BasicEffect;								    // 对象渲染特效管理
+	
+	SkyEffect m_SkyEffect;									    // 天空盒特效管理
+	std::unique_ptr<SkyRender> m_pDaylight;					    // 天空盒(白天)
+	std::unique_ptr<SkyRender> m_pSunset;						// 天空盒(日落)
+	std::unique_ptr<SkyRender> m_pDesert;						// 天空盒(沙漠)
+	SkyBoxMode m_SkyBoxMode;									// 天空盒模式
+	std::wstring m_PickedObjStr;
+	std::shared_ptr<Camera> m_pCamera;						    // 摄像机
+	CameraMode m_CameraMode;									// 摄像机模式
+
+	ObjReader m_ObjReader;									    // 模型读取对象
 };
 
 
